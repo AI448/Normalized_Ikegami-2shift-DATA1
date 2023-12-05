@@ -25,11 +25,11 @@ class Member:
 
 class Shift(Enum):
     """シフト種別"""
-    OFF = "OFF"
-    DAY = "DAY"
-    NIGHT = "NIGHT"
-    MORNING = "MORNING"
-    OTHER = "OTHER"
+    OFF = "OFF"  # 休み
+    DAY = "DAY"  # 日勤
+    NIGHT = "NIGHT"  # 夜勤
+    MORNING = "MORNING"  # 夜勤明けの朝の勤務
+    OTHER = "OTHER"  # その他
 
 
 @dataclass(frozen=True)
@@ -39,13 +39,14 @@ class NGPattern:
 
 
 def _date_to_id(date: Date):
+    # MEMO: str(date) だと LP ファイルの禁則文字が出力されてしまうため，フォーマットを指定して文字列化している
     return date.strftime("%Y%m%d")
 
 
 class Ikegami2ShiftModel:
-    """最適化モデル"""
+    """最適化モデルクラス"""
 
-    # MEMO: モデルを修正して何度も実行したりするときにはこのようなクラスを作ったほうが便利なこともあるが，
+    # MEMO: モデルを修正して何度も実行するときにはこのようなクラスを作ったほうが便利なこともあるが，
     # 今回の簡単な例ではあまり意味はなく，データに対してモデルを返す関数
     #   def build_model(...) -> pulp.LpProblem
     # または，データに対して割当結果を返す関数
@@ -74,12 +75,13 @@ class Ikegami2ShiftModel:
     ):
         """データから最適化モデルを構築する"""
 
+        # 土曜日の集合
         saturdays = {date for date in dates if date.day_of_week == 5}
-
+        # グループ -> グループに属するメンバーのリスト
         group_to_members: Dict[Group, List[Member]] = {}
         for group, member in group_members:
             group_to_members.setdefault(group, []).append(member)
-
+        # NGパターンID → (順序, シフト)
         ng_pattern_to_order_shift: Dict[NGPattern, List[Tuple[int, Shift]]] = {}
         for (ng_pattern, order), shift in ng_petterns.items():
             ng_pattern_to_order_shift.setdefault(ng_pattern, []).append((order, shift))
@@ -87,7 +89,7 @@ class Ikegami2ShiftModel:
         self.problem = pulp.LpProblem()
 
         #
-        # 変数の定義(今回は変数が 2 種類だけなので x と y にした)
+        # 変数の定義(今回は変数が 2 種類だけなので名前を x と y にした)
         #
         # member が date に shift を実行するなら 1 そうでなければ 0
         self.x: Dict[Tuple[Member, date, Shift], pulp.LpVariable] = {}
@@ -376,7 +378,7 @@ def main():
     # 割当リクエスト
     request_shift = {
         (Member(member), Date(date)): Shift(shift)
-        for member, date, shift in zip(df_request_shift["member"], df_request_shift["date"], df_request_shift["request_shift"])
+        for member, date, shift in zip(df_request_shift["member"], df_request_shift["date"], df_request_shift["shift"])
     }
     # 割当禁止
     refused_shift = {
